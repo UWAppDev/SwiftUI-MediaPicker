@@ -46,6 +46,7 @@ playground.xcworkspace
 # hence it is not needed unless you have added a package configuration file to your project
 # .swiftpm
 
+.swiftpm/
 .build/
 
 # CocoaPods
@@ -88,3 +89,5 @@ fastlane/test_output
 # https://github.com/johnno1962/injectionforxcode
 
 iOSInjectionProject/
+
+.DS_Store
