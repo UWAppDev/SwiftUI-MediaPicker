@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "SwiftUI-PhotoPicker",
     platforms: [
-        .iOS(.v15), .macOS(.v12),
+        .iOS(.v14), .macOS(.v11),
     ],
     products: [
         .library(

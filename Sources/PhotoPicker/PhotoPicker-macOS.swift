@@ -76,9 +76,10 @@ public extension View {
 struct PhotoPicker_Previews: PreviewProvider {
     @State
     static var showImagePicker: Bool = false
+    
     @State
-    static var image: AsyncImage = AsyncImage(url: nil)
-
+    static var url: URL? = nil
+    
     static var previews: some View {
         HStack {
             Spacer()
@@ -90,8 +91,22 @@ struct PhotoPicker_Previews: PreviewProvider {
                     Text("Select Image")
                 }
                 
-                if let image = image {
-                    image
+                if let url = url {
+                    if #available(macOS 12, *) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        } placeholder: {
+                            EmptyView()
+                        }
+                    } else {
+                        if let nsImage = NSImage(contentsOf: url) {
+                            Image(nsImage: nsImage)
+                        } else {
+                            Text("Can't load contents of \(url)")
+                        }
+                    }
                 }
                 Spacer()
             }
@@ -100,10 +115,10 @@ struct PhotoPicker_Previews: PreviewProvider {
         .photoImporter(isPresented: $showImagePicker) { result in
             switch result {
             case .success(let url):
-                image = AsyncImage(url: url)
+                self.url = url
             case .failure(let error):
                 print(error)
-                image = AsyncImage(url: nil)
+                self.url = nil
             }
         }
     }

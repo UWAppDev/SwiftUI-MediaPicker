@@ -208,12 +208,23 @@ struct PhotoPicker_Previews: PreviewProvider {
                 Text("Select Image")
             }
             
-            AsyncImage(url: url) { image in
-                image
-                    .resizable()
-                    .scaledToFit()
-            } placeholder: {
-                EmptyView()
+            if let url = url {
+                if #available(iOS 15, *) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    } placeholder: {
+                        EmptyView()
+                    }
+                } else {
+                    if let data = try? Data(contentsOf: url),
+                       let uiImage = UIImage(data: data) {
+                        Image(uiImage: uiImage)
+                    } else {
+                        Text("Can't load contents of \(url)")
+                    }
+                }
             }
         }
         .photoImporter(isPresented: $showImagePicker) { result in
