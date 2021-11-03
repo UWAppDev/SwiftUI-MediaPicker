@@ -1,2 +1,3 @@
-# SwiftUI-PhotoPicker
-iOS/macOS photo picker for SwiftUI
+# SwiftUI-MediaPicker
+
+iOS/macOS media picker for importing images and videos in SwiftUI.

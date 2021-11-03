@@ -4,21 +4,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "SwiftUI-PhotoPicker",
+    name: "SwiftUI-MediaPicker",
     platforms: [
         .iOS(.v14), .macOS(.v11),
     ],
     products: [
         .library(
-            name: "PhotoPicker",
-            targets: ["PhotoPicker"]),
+            name: "MediaPicker",
+            targets: ["MediaPicker"]),
     ],
     targets: [
         .target(
-            name: "PhotoPicker",
+            name: "MediaPicker",
             dependencies: []),
         .testTarget(
-            name: "PhotoPickerTests",
-            dependencies: ["PhotoPicker"]),
+            name: "MediaPickerTests",
+            dependencies: ["MediaPicker"]),
     ]
 )

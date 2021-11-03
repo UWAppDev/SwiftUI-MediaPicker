@@ -2,13 +2,13 @@
 //
 // This source file is part of the SwiftUI FoodTracker tutorial series
 //
-// Copyright (c) 2020-2021 AppDev@UW.edu and the SwiftUI PhotoPicker authors
+// Copyright (c) 2020-2021 AppDev@UW.edu and the SwiftUI MediaPicker authors
 // Licensed under MIT License
 //
-// See https://github.com/UWAppDev/SwiftUI-PhotoPicker/blob/main/LICENSE
+// See https://github.com/UWAppDev/SwiftUI-MediaPicker/blob/main/LICENSE
 // for license information
-// See https://github.com/UWAppDev/SwiftUI-PhotoPicker/graphs/contributors
-// for the list of SwiftUI PhotoPicker project authors
+// See https://github.com/UWAppDev/SwiftUI-MediaPicker/graphs/contributors
+// for the list of SwiftUI MediaPicker project authors
 //
 //===----------------------------------------------------------------------===//
 
@@ -85,7 +85,7 @@ public extension View {
         configuration.filter = PHPickerFilter.from(allowedMediaTypes)
 
         return self.sheet(isPresented: isPresented) {
-            PhotoPicker(
+            MediaPicker(
                 isPresented: isPresented,
                 configuration: configuration,
                 onCompletion: onCompletion
@@ -111,7 +111,7 @@ fileprivate extension PHPickerFilter {
 
 // Meet the new Photos picker
 // https://developer.apple.com/wwdc20/10652
-fileprivate struct PhotoPicker: UIViewControllerRepresentable {
+fileprivate struct MediaPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let configuration: PHPickerConfiguration
     let onCompletion: (Result<[URL], Error>) -> Void
@@ -132,10 +132,10 @@ fileprivate struct PhotoPicker: UIViewControllerRepresentable {
     }
     
     class Coordinator: PHPickerViewControllerDelegate {
-        let coordinated: PhotoPicker
+        let coordinated: MediaPicker
         
-        init(for photoPicker: PhotoPicker) {
-            self.coordinated = photoPicker
+        init(for picker: MediaPicker) {
+            self.coordinated = picker
         }
         
         func picker(_ picker: PHPickerViewController,
@@ -220,7 +220,7 @@ fileprivate extension NSItemProvider {
     }
 }
 
-struct PhotoPicker_Previews: PreviewProvider {
+struct MediaPicker_Previews: PreviewProvider {
     @State
     static var showImagePicker: Bool = false
     @State
