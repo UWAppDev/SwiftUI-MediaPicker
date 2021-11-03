@@ -20,12 +20,12 @@ public struct MediaTypeOptions: OptionSet {
     }
     
     /// Only Live Photos.
-    static let livePhotos = MediaTypeOptions(rawValue: 1 << 0)
+    public static let livePhotos = MediaTypeOptions(rawValue: 1 << 0)
     /// Images, including Live Photos.
-    static let images: MediaTypeOptions = [MediaTypeOptions(rawValue: 1 << 1), livePhotos]
+    public static let images: MediaTypeOptions = [MediaTypeOptions(rawValue: 1 << 1), livePhotos]
     /// Only videos.
-    static let videos = MediaTypeOptions(rawValue: 1 << 2)
+    public static let videos = MediaTypeOptions(rawValue: 1 << 2)
     
     /// All media types.
-    static let all: MediaTypeOptions = [.images, .videos]
+    public static let all: MediaTypeOptions = [.images, .videos]
 }
