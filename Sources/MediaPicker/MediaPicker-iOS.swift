@@ -39,12 +39,12 @@ public extension View {
     ///     succeeded or failed.
     ///   - result: A `Result` indicating whether the operation succeeded or
     ///     failed.
-    func photoImporter(
+    func mediaImporter(
         isPresented: Binding<Bool>,
         allowedMediaTypes: MediaTypeOptions,
         onCompletion: @escaping (Result<URL, Error>) -> Void
     ) -> some View {
-        self.photoImporter(isPresented: isPresented,
+        self.mediaImporter(isPresented: isPresented,
                            allowedMediaTypes: allowedMediaTypes,
                            allowsMultipleSelection: false) { result in
             onCompletion(result.map { $0.first! })
@@ -74,7 +74,7 @@ public extension View {
     ///     succeeded or failed.
     ///   - result: A `Result` indicating whether the operation succeeded or
     ///     failed.
-    func photoImporter(
+    func mediaImporter(
         isPresented: Binding<Bool>,
         allowedMediaTypes: MediaTypeOptions,
         allowsMultipleSelection: Bool,
@@ -253,7 +253,7 @@ struct MediaPicker_Previews: PreviewProvider {
                 }
             }
         }
-        .photoImporter(isPresented: $showImagePicker,
+        .mediaImporter(isPresented: $showImagePicker,
                        allowedMediaTypes: .images) { result in
             switch result {
             case .success(let url):
