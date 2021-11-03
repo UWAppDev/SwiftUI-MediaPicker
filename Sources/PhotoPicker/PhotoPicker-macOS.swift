@@ -14,10 +14,11 @@
 
 #if os(macOS)
 import SwiftUI
+import UniformTypeIdentifiers
 
 public extension View {
     /// Presents a system interface for allowing the user to import an existing
-    /// photo.
+    /// media.
     ///
     /// In order for the interface to appear, `isPresented` must be `true`. When
     /// the operation is finished, `isPresented` will be set to `false` before
@@ -25,23 +26,30 @@ public extension View {
     /// `isPresented` will be set to `false` and `onCompletion` will not be
     /// called.
     ///
+    /// - Note: Changing `allowedMediaTypes` while the file importer is
+    ///   presented will have no immediate effect, however will apply the next
+    ///   time it is presented.
+    ///
     /// - Parameters:
     ///   - isPresented: A binding to whether the interface should be shown.
+    ///   - allowedMediaTypes: The list of supported media types which can
+    ///     be imported.
     ///   - onCompletion: A callback that will be invoked when the operation has
     ///     succeeded or failed.
     ///   - result: A `Result` indicating whether the operation succeeded or
     ///     failed.
     func photoImporter(
         isPresented: Binding<Bool>,
+        allowedMediaTypes: MediaTypeOptions,
         onCompletion: @escaping (Result<URL, Error>) -> Void
     ) -> some View {
         self.fileImporter(isPresented: isPresented,
-                          allowedContentTypes: [.image],
+                          allowedContentTypes: .from(allowedMediaTypes),
                           onCompletion: onCompletion)
     }
     
     /// Presents a system interface for allowing the user to import multiple
-    /// photos.
+    /// medium.
     ///
     /// In order for the interface to appear, `isPresented` must be `true`. When
     /// the operation is finished, `isPresented` will be set to `false` before
@@ -49,12 +57,14 @@ public extension View {
     /// `isPresented` will be set to `false` and `onCompletion` will not be
     /// called.
     ///
-    /// - Note: Changing `allowsMultipleSelection`
+    /// - Note: Changing `allowedMediaTypes` or `allowsMultipleSelection`
     ///   while the file importer is presented will have no immediate effect,
     ///   however will apply the next time it is presented.
     ///
     /// - Parameters:
     ///   - isPresented: A binding to whether the interface should be shown.
+    ///   - allowedMediaTypes: The list of supported media types which can
+    ///     be imported.
     ///   - allowsMultipleSelection: Whether the importer allows the user to
     ///     select more than one file to import.
     ///   - onCompletion: A callback that will be invoked when the operation has
@@ -63,13 +73,29 @@ public extension View {
     ///     failed.
     func photoImporter(
         isPresented: Binding<Bool>,
+        allowedMediaTypes: MediaTypeOptions,
         allowsMultipleSelection: Bool,
         onCompletion: @escaping (Result<[URL], Error>) -> Void
     ) -> some View {
         self.fileImporter(isPresented: isPresented,
-                          allowedContentTypes: [.image],
+                          allowedContentTypes: .from(allowedMediaTypes),
                           allowsMultipleSelection: allowsMultipleSelection,
                           onCompletion: onCompletion)
+    }
+}
+
+fileprivate extension Array where Element == UTType {
+    static func from(_ mediaOptions: MediaTypeOptions) -> Self {
+        var types = Self()
+        if mediaOptions.contains(.images) {
+            types.append(.image)
+        } else if mediaOptions.contains(.livePhotos) {
+            types.append(.livePhoto)
+        }
+        if mediaOptions.contains(.videos) {
+            types.append(.audiovisualContent)
+        }
+        return types
     }
 }
 
@@ -112,7 +138,8 @@ struct PhotoPicker_Previews: PreviewProvider {
             }
             Spacer()
         }
-        .photoImporter(isPresented: $showImagePicker) { result in
+        .photoImporter(isPresented: $showImagePicker,
+                       allowedMediaTypes: .images) { result in
             switch result {
             case .success(let url):
                 self.url = url

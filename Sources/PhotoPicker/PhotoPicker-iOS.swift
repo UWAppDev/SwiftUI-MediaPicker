@@ -19,7 +19,7 @@ import UniformTypeIdentifiers
 
 public extension View {
     /// Presents a system interface for allowing the user to import an existing
-    /// photo.
+    /// media.
     ///
     /// In order for the interface to appear, `isPresented` must be `true`. When
     /// the operation is finished, `isPresented` will be set to `false` before
@@ -27,24 +27,32 @@ public extension View {
     /// `isPresented` will be set to `false` and `onCompletion` will not be
     /// called.
     ///
+    /// - Note: Changing `allowedMediaTypes` while the file importer is
+    ///   presented will have no immediate effect, however will apply the next
+    ///   time it is presented.
+    ///
     /// - Parameters:
     ///   - isPresented: A binding to whether the interface should be shown.
+    ///   - allowedMediaTypes: The list of supported media types which can
+    ///     be imported.
     ///   - onCompletion: A callback that will be invoked when the operation has
     ///     succeeded or failed.
     ///   - result: A `Result` indicating whether the operation succeeded or
     ///     failed.
     func photoImporter(
         isPresented: Binding<Bool>,
+        allowedMediaTypes: MediaTypeOptions,
         onCompletion: @escaping (Result<URL, Error>) -> Void
     ) -> some View {
         self.photoImporter(isPresented: isPresented,
+                           allowedMediaTypes: allowedMediaTypes,
                            allowsMultipleSelection: false) { result in
             onCompletion(result.map { $0.first! })
         }
     }
     
     /// Presents a system interface for allowing the user to import multiple
-    /// photos.
+    /// medium.
     ///
     /// In order for the interface to appear, `isPresented` must be `true`. When
     /// the operation is finished, `isPresented` will be set to `false` before
@@ -52,12 +60,14 @@ public extension View {
     /// `isPresented` will be set to `false` and `onCompletion` will not be
     /// called.
     ///
-    /// - Note: Changing `allowsMultipleSelection`
+    /// - Note: Changing `allowedMediaTypes` or `allowsMultipleSelection`
     ///   while the file importer is presented will have no immediate effect,
     ///   however will apply the next time it is presented.
     ///
     /// - Parameters:
     ///   - isPresented: A binding to whether the interface should be shown.
+    ///   - allowedMediaTypes: The list of supported media types which can
+    ///     be imported.
     ///   - allowsMultipleSelection: Whether the importer allows the user to
     ///     select more than one file to import.
     ///   - onCompletion: A callback that will be invoked when the operation has
@@ -66,12 +76,13 @@ public extension View {
     ///     failed.
     func photoImporter(
         isPresented: Binding<Bool>,
+        allowedMediaTypes: MediaTypeOptions,
         allowsMultipleSelection: Bool,
         onCompletion: @escaping (Result<[URL], Error>) -> Void
     ) -> some View {
         var configuration = PHPickerConfiguration()
         configuration.selectionLimit = allowsMultipleSelection ? 0 : 1
-        configuration.filter = .images
+        configuration.filter = PHPickerFilter.from(allowedMediaTypes)
 
         return self.sheet(isPresented: isPresented) {
             PhotoPicker(
@@ -80,6 +91,21 @@ public extension View {
                 onCompletion: onCompletion
             )
         }
+    }
+}
+
+fileprivate extension PHPickerFilter {
+    static func from(_ mediaOptions: MediaTypeOptions) -> Self {
+        var filters = [PHPickerFilter]()
+        if mediaOptions.contains(.images) {
+            filters.append(.images)
+        } else if mediaOptions.contains(.livePhotos) {
+            filters.append(.livePhotos)
+        }
+        if mediaOptions.contains(.videos) {
+            filters.append(.videos)
+        }
+        return PHPickerFilter.any(of: filters)
     }
 }
 
@@ -227,7 +253,8 @@ struct PhotoPicker_Previews: PreviewProvider {
                 }
             }
         }
-        .photoImporter(isPresented: $showImagePicker) { result in
+        .photoImporter(isPresented: $showImagePicker,
+                       allowedMediaTypes: .images) { result in
             switch result {
             case .success(let url):
                 self.url = url
