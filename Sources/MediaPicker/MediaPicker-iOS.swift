@@ -144,37 +144,41 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
                 dismiss()
                 return
             }
-            Task {
-                do {
-                    let images = try await imageURLs(from: results)
-                    complete(with: .success(images))
-                } catch {
-                    complete(with: .failure(error))
-                }
-            }
+            getImageURLs(from: results, then: complete)
         }
         
         // Explore structured concurrency in Swift
         // https://developer.apple.com/wwdc21/10134
-        private func imageURLs(from phPickerResults: [PHPickerResult]) async throws -> [URL] {
-            try await withThrowingTaskGroup(of: URL.self) { group in
-                var imageURLs = [URL]()
-                imageURLs.reserveCapacity(phPickerResults.count)
-
-                for result in phPickerResults {
-                    guard result.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else {
-                        throw AVError(.failedToLoadMediaData)
-                    }
-                    group.addTask {
-                        try await result.itemProvider.imageFileURL
-                    }
+        private func getImageURLs(from phPickerResults: [PHPickerResult],
+                                  then resume: @escaping (Result<[URL], Error>) -> ()) {
+            var imageURLs = [URL]()
+            var resumed = false
+            imageURLs.reserveCapacity(phPickerResults.count)
+            let group = DispatchGroup()
+            
+            for result in phPickerResults {
+                guard result.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else {
+                    resumed = true
+                    resume(.failure(AVError(.failedToLoadMediaData)))
+                    return
                 }
-                
-                // Obtain results from the child tasks, sequentially.
-                for try await imageURL in group {
-                    imageURLs.append(imageURL)
+                group.enter()
+                result.itemProvider.loadImageFileURL { result in
+                    switch result {
+                    case .success(let url):
+                        imageURLs.append(url)
+                    case .failure(let error):
+                        resumed = true
+                        resume(.failure(error))
+                    }
+                    group.leave()
                 }
-                return imageURLs
+            }
+            group.notify(queue: .global()) {
+                if !resumed {
+                    resumed = true
+                    resume(.success(imageURLs))
+                }
             }
         }
         
@@ -190,31 +194,25 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
 }
 
 fileprivate extension NSItemProvider {
-    // Meet async/await in Swift
-    // https://developer.apple.com/wwdc21/10132/
-    var imageFileURL: URL {
-        get async throws {
-            try await withCheckedThrowingContinuation { continuation in
-                // https://developer.apple.com/forums/thread/652496
-                loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, error in
-                    guard let src = url else {
-                        return continuation.resume(throwing: error!)
-                    }
-                    do {
-                        // Because the src/url will be deleted once we return,
-                        // will copy the stored image to a different temp url.
-                        let dst = try FileManager.default.url(
-                            for: .itemReplacementDirectory, in: .userDomainMask,
-                            appropriateFor: src, create: true
-                        ).appendingPathComponent(src.lastPathComponent)
-                        if !FileManager.default.fileExists(atPath: dst.path) {
-                            try FileManager.default.copyItem(at: src, to: dst)
-                        }
-                        continuation.resume(returning: dst)
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
+    func loadImageFileURL(then resume: @escaping (Result<URL, Error>) -> ()) {
+        // https://developer.apple.com/forums/thread/652496
+        loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, error in
+            guard let src = url else {
+                return resume(.failure(error!))
+            }
+            do {
+                // Because the src/url will be deleted once we return,
+                // will copy the stored image to a different temp url.
+                let dst = try FileManager.default.url(
+                    for: .itemReplacementDirectory, in: .userDomainMask,
+                    appropriateFor: src, create: true
+                ).appendingPathComponent(src.lastPathComponent)
+                if !FileManager.default.fileExists(atPath: dst.path) {
+                    try FileManager.default.copyItem(at: src, to: dst)
                 }
+                resume(.success(dst))
+            } catch {
+                resume(.failure(error))
             }
         }
     }
