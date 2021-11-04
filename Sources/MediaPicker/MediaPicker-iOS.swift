@@ -26,7 +26,7 @@ public extension View {
     /// `isPresented` will be set to `false` and `onCompletion` will not be
     /// called.
     ///
-    /// - Note: Changing `allowedMediaTypes` while the file importer is
+    /// - Note: Changing `allowedMediaTypes` while the media importer is
     ///   presented will have no immediate effect, however will apply the next
     ///   time it is presented.
     ///
@@ -60,7 +60,7 @@ public extension View {
     /// called.
     ///
     /// - Note: Changing `allowedMediaTypes` or `allowsMultipleSelection`
-    ///   while the file importer is presented will have no immediate effect,
+    ///   while the media importer is presented will have no immediate effect,
     ///   however will apply the next time it is presented.
     ///
     /// - Parameters:
@@ -68,7 +68,7 @@ public extension View {
     ///   - allowedMediaTypes: The list of supported media types which can
     ///     be imported.
     ///   - allowsMultipleSelection: Whether the importer allows the user to
-    ///     select more than one file to import.
+    ///     select more than one media to import.
     ///   - onCompletion: A callback that will be invoked when the operation has
     ///     succeeded or failed.
     ///   - result: A `Result` indicating whether the operation succeeded or
