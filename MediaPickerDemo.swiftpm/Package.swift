@@ -16,7 +16,7 @@ let package = Package(
         .iOSApplication(
             name: "MediaPickerDemo",
             targets: ["AppModule"],
-            bundleIdentifier: "dev.uwapp.MediaPickerTests",
+            bundleIdentifier: "dev.uwapp.MediaPicker.Demo",
             teamIdentifier: "2H866F22W7",
             displayVersion: "1.0",
             bundleVersion: "1",
