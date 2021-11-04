@@ -12,6 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import UniformTypeIdentifiers
+
 public struct MediaTypeOptions: OptionSet {
     public let rawValue: Int
     
@@ -28,4 +30,18 @@ public struct MediaTypeOptions: OptionSet {
     
     /// All media types.
     public static let all: MediaTypeOptions = [.images, .videos]
+    
+    /// All uniform type identifiers for contained media types.
+    internal var typeIdentifiers: [UTType] {
+        var types = [UTType]()
+        if contains(.images) {
+            types.append(.image)
+        } else if contains(.livePhotos) {
+            types.append(.livePhoto)
+        }
+        if contains(.videos) {
+            types.append(.audiovisualContent)
+        }
+        return types
+    }
 }

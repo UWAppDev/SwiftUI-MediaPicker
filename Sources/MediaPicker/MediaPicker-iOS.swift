@@ -87,6 +87,7 @@ public extension View {
         return self.sheet(isPresented: isPresented) {
             MediaPicker(
                 isPresented: isPresented,
+                allowedContentTypes: allowedMediaTypes.typeIdentifiers,
                 configuration: configuration,
                 onCompletion: onCompletion
             )
@@ -113,6 +114,7 @@ fileprivate extension PHPickerFilter {
 // https://developer.apple.com/wwdc20/10652
 fileprivate struct MediaPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
+    let allowedContentTypes: [UTType]
     let configuration: PHPickerConfiguration
     let onCompletion: (Result<[URL], Error>) -> Void
     
@@ -160,14 +162,21 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
             try await withThrowingTaskGroup(of: URL.self) { group in
                 var imageURLs = [URL]()
                 imageURLs.reserveCapacity(phPickerResults.count)
-
+                
+            pickerResultsLoop:
                 for result in phPickerResults {
-                    guard result.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else {
-                        throw AVError(.failedToLoadMediaData)
+                    let provider = result.itemProvider
+                    // TOOD: investigate should we instead use/consider
+                    // provider.registeredTypeIdentifiers
+                    for type in coordinated.allowedContentTypes {
+                        if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                            group.addTask {
+                                try await provider.fileURL(for: type)
+                            }
+                            continue pickerResultsLoop
+                        }
                     }
-                    group.addTask {
-                        try await result.itemProvider.imageFileURL
-                    }
+                    throw AVError(.failedToLoadMediaData)
                 }
                 
                 // Obtain results from the child tasks, sequentially.
@@ -192,28 +201,24 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
 fileprivate extension NSItemProvider {
     // Meet async/await in Swift
     // https://developer.apple.com/wwdc21/10132/
-    var imageFileURL: URL {
-        get async throws {
-            try await withCheckedThrowingContinuation { continuation in
-                // https://developer.apple.com/forums/thread/652496
-                loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, error in
-                    guard let src = url else {
-                        return continuation.resume(throwing: error!)
+    func fileURL(for type: UTType) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            // https://developer.apple.com/forums/thread/652496
+            loadFileRepresentation(forTypeIdentifier: type.identifier) { url, error in
+                guard let src = url else {
+                    return continuation.resume(throwing: error!)
+                }
+                do {
+                    // Because the src/url will be deleted once we return,
+                    // will copy the stored image to a different temp url.
+                    let dst = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(src.lastPathComponent)
+                    if !FileManager.default.fileExists(atPath: dst.path) {
+                        try FileManager.default.copyItem(at: src, to: dst)
                     }
-                    do {
-                        // Because the src/url will be deleted once we return,
-                        // will copy the stored image to a different temp url.
-                        let dst = try FileManager.default.url(
-                            for: .itemReplacementDirectory, in: .userDomainMask,
-                            appropriateFor: src, create: true
-                        ).appendingPathComponent(src.lastPathComponent)
-                        if !FileManager.default.fileExists(atPath: dst.path) {
-                            try FileManager.default.copyItem(at: src, to: dst)
-                        }
-                        continuation.resume(returning: dst)
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
+                    continuation.resume(returning: dst)
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
         }

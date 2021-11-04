@@ -44,7 +44,7 @@ public extension View {
         onCompletion: @escaping (Result<URL, Error>) -> Void
     ) -> some View {
         self.fileImporter(isPresented: isPresented,
-                          allowedContentTypes: .from(allowedMediaTypes),
+                          allowedContentTypes: allowedMediaTypes.typeIdentifiers,
                           onCompletion: onCompletion)
     }
     
@@ -78,24 +78,9 @@ public extension View {
         onCompletion: @escaping (Result<[URL], Error>) -> Void
     ) -> some View {
         self.fileImporter(isPresented: isPresented,
-                          allowedContentTypes: .from(allowedMediaTypes),
+                          allowedContentTypes: allowedMediaTypes.typeIdentifiers,
                           allowsMultipleSelection: allowsMultipleSelection,
                           onCompletion: onCompletion)
-    }
-}
-
-fileprivate extension Array where Element == UTType {
-    static func from(_ mediaOptions: MediaTypeOptions) -> Self {
-        var types = Self()
-        if mediaOptions.contains(.images) {
-            types.append(.image)
-        } else if mediaOptions.contains(.livePhotos) {
-            types.append(.livePhoto)
-        }
-        if mediaOptions.contains(.videos) {
-            types.append(.audiovisualContent)
-        }
-        return types
     }
 }
 
