@@ -1,8 +1,8 @@
-# SwiftUI-MediaPicker
+# SwiftUI Media Picker
 
 iOS/macOS media picker for importing images and videos in SwiftUI.
 
-## Sample Code
+## Example
 
 ```swift
 import SwiftUI
@@ -35,7 +35,7 @@ struct ContentView: View {
             Section {
                 ForEach(urls, id: \.absoluteString) { url in
                     switch try! url.resourceValues(forKeys: [.contentTypeKey]).contentType! {
-                    case let x where x.conforms(to: .image):
+                    case let contentType where contentType.conforms(to: .image):
                         AsyncImage(url: url) { image in
                             image
                                 .resizable()
@@ -43,7 +43,7 @@ struct ContentView: View {
                         } placeholder: {
                             ProgressView()
                         }
-                    case let x where x.conforms(to: .audiovisualContent):
+                    case let contentType where contentType.conforms(to: .audiovisualContent):
                         VideoPlayer(player: AVPlayer(url: url))
                             .scaledToFit()
                     default:
