@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import UniformTypeIdentifiers
+@_implementationOnly import UniformTypeIdentifiers
 
 public struct MediaTypeOptions: OptionSet {
     public let rawValue: Int

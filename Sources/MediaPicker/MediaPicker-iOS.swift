@@ -14,8 +14,7 @@
 
 #if os(iOS)
 import SwiftUI
-import PhotosUI
-import UniformTypeIdentifiers
+@_implementationOnly import PhotosUI
 
 public extension View {
     /// Presents a system interface for allowing the user to import an existing
