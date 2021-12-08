@@ -147,6 +147,7 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
             }
             Task {
                 do {
+                    // TODO: some how show a progress bar when importing media
                     let images = try await imageURLs(from: results)
                     complete(with: .success(images))
                 } catch {
