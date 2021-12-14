@@ -47,7 +47,7 @@ public extension View {
             isPresented: isPresented,
             allowedMediaTypes: allowedMediaTypes,
             onCompletion: onCompletion,
-            loadingOverlay: DefaultLoadingOverlay()
+            loadingOverlay: DefaultLoadingOverlay.init
         )
     }
 
@@ -55,7 +55,7 @@ public extension View {
         isPresented: Binding<Bool>,
         allowedMediaTypes: MediaTypeOptions,
         onCompletion: @escaping (Result<URL, Error>) -> Void,
-        loadingOverlay: LoadingOverlay
+        @ViewBuilder loadingOverlay: @escaping () -> LoadingOverlay
     ) -> some View {
         self.mediaImporter(
             isPresented: isPresented,
@@ -102,7 +102,7 @@ public extension View {
             allowedMediaTypes: allowedMediaTypes,
             allowsMultipleSelection: allowsMultipleSelection,
             onCompletion: onCompletion,
-            loadingOverlay: DefaultLoadingOverlay()
+            loadingOverlay: DefaultLoadingOverlay.init
         )
     }
     
@@ -111,7 +111,7 @@ public extension View {
         allowedMediaTypes: MediaTypeOptions,
         allowsMultipleSelection: Bool,
         onCompletion: @escaping (Result<[URL], Error>) -> Void,
-        loadingOverlay: LoadingOverlay
+        @ViewBuilder loadingOverlay: @escaping () -> LoadingOverlay
     ) -> some View {
         var configuration = PHPickerConfiguration()
         configuration.selectionLimit = allowsMultipleSelection ? 0 : 1
@@ -123,7 +123,7 @@ public extension View {
                 allowedContentTypes: allowedMediaTypes.typeIdentifiers,
                 configuration: configuration,
                 onCompletion: onCompletion,
-                loadingOverlay: loadingOverlay
+                makeLoadingOverlay: loadingOverlay
             )
         }
     }
@@ -146,7 +146,7 @@ fileprivate struct MediaPickerWrapper<LoadingOverlay: View>: View {
     let allowedContentTypes: [UTType]
     let configuration: PHPickerConfiguration
     let onCompletion: (Result<[URL], Error>) -> Void
-    let loadingOverlay: LoadingOverlay
+    let makeLoadingOverlay: () -> LoadingOverlay
 
     var body: some View {
         MediaPicker(
@@ -156,7 +156,7 @@ fileprivate struct MediaPickerWrapper<LoadingOverlay: View>: View {
             configuration: configuration,
             onCompletion: onCompletion
         )
-        .overlay(isLoading ? loadingOverlay : nil)
+        .overlay(isLoading ? makeLoadingOverlay() : nil)
     }
 }
 
