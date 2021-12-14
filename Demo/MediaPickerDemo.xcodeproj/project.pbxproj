@@ -66,10 +66,10 @@
 		D2A0C5E82768268C00CB4F6F /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				D2A0C5E92768268C00CB4F6F /* MediaPickerDemoApp.swift */,
-				D2A0C5EA2768268C00CB4F6F /* ContentView.swift */,
-				D2A0C60E2768281300CB4F6F /* NativeImage.swift */,
 				D2A0C5EB2768268D00CB4F6F /* Assets.xcassets */,
+				D2A0C5EA2768268C00CB4F6F /* ContentView.swift */,
+				D2A0C5E92768268C00CB4F6F /* MediaPickerDemoApp.swift */,
+				D2A0C60E2768281300CB4F6F /* NativeImage.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
