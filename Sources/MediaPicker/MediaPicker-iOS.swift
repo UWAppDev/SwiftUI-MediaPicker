@@ -43,11 +43,29 @@ public extension View {
         allowedMediaTypes: MediaTypeOptions,
         onCompletion: @escaping (Result<URL, Error>) -> Void
     ) -> some View {
-        self.mediaImporter(isPresented: isPresented,
-                           allowedMediaTypes: allowedMediaTypes,
-                           allowsMultipleSelection: false) { result in
-            onCompletion(result.map { $0.first! })
-        }
+        self.mediaImporter(
+            isPresented: isPresented,
+            allowedMediaTypes: allowedMediaTypes,
+            onCompletion: onCompletion,
+            loadingOverlay: DefaultLoadingOverlay()
+        )
+    }
+
+    func mediaImporter<LoadingOverlay: View>(
+        isPresented: Binding<Bool>,
+        allowedMediaTypes: MediaTypeOptions,
+        onCompletion: @escaping (Result<URL, Error>) -> Void,
+        loadingOverlay: LoadingOverlay
+    ) -> some View {
+        self.mediaImporter(
+            isPresented: isPresented,
+            allowedMediaTypes: allowedMediaTypes,
+            allowsMultipleSelection: false,
+            onCompletion: { result in
+                onCompletion(result.map { $0.first! })
+            },
+            loadingOverlay: loadingOverlay
+        )
     }
     
     /// Presents a system interface for allowing the user to import multiple
@@ -79,18 +97,66 @@ public extension View {
         allowsMultipleSelection: Bool,
         onCompletion: @escaping (Result<[URL], Error>) -> Void
     ) -> some View {
+        self.mediaImporter(
+            isPresented: isPresented,
+            allowedMediaTypes: allowedMediaTypes,
+            allowsMultipleSelection: allowsMultipleSelection,
+            onCompletion: onCompletion,
+            loadingOverlay: DefaultLoadingOverlay()
+        )
+    }
+    
+    func mediaImporter<LoadingOverlay: View>(
+        isPresented: Binding<Bool>,
+        allowedMediaTypes: MediaTypeOptions,
+        allowsMultipleSelection: Bool,
+        onCompletion: @escaping (Result<[URL], Error>) -> Void,
+        loadingOverlay: LoadingOverlay
+    ) -> some View {
         var configuration = PHPickerConfiguration()
         configuration.selectionLimit = allowsMultipleSelection ? 0 : 1
         configuration.filter = PHPickerFilter.from(allowedMediaTypes)
-
+        
         return self.sheet(isPresented: isPresented) {
-            MediaPicker(
+            MediaPickerWrapper(
                 isPresented: isPresented,
                 allowedContentTypes: allowedMediaTypes.typeIdentifiers,
                 configuration: configuration,
-                onCompletion: onCompletion
+                onCompletion: onCompletion,
+                loadingOverlay: loadingOverlay
             )
         }
+    }
+}
+
+fileprivate struct DefaultLoadingOverlay: View {
+    var body: some View {
+        ZStack {
+            Color(.tertiarySystemBackground)
+                .ignoresSafeArea()
+
+            ProgressView("Importing Media...")
+        }
+    }
+}
+
+fileprivate struct MediaPickerWrapper<LoadingOverlay: View>: View {
+    var isPresented: Binding<Bool>
+    @State var isLoading: Bool = false
+    let allowedContentTypes: [UTType]
+    let configuration: PHPickerConfiguration
+    let onCompletion: (Result<[URL], Error>) -> Void
+    let loadingOverlay: LoadingOverlay
+
+    var body: some View {
+        MediaPicker(
+            isPresented: isPresented,
+            isLoading: $isLoading,
+            allowedContentTypes: allowedContentTypes,
+            configuration: configuration,
+            onCompletion: onCompletion
+        )
+        .overlay(isLoading ? loadingOverlay : nil)
     }
 }
 
@@ -113,6 +179,7 @@ fileprivate extension PHPickerFilter {
 // https://developer.apple.com/wwdc20/10652
 fileprivate struct MediaPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
+    @Binding var isLoading: Bool
     let allowedContentTypes: [UTType]
     let configuration: PHPickerConfiguration
     let onCompletion: (Result<[URL], Error>) -> Void
@@ -147,8 +214,13 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
             }
             Task {
                 do {
-                    // TODO: some how show a progress bar when importing media
+                    await MainActor.run {
+                        withAnimation {
+                            coordinated.isLoading = true
+                        }
+                    }
                     let images = try await imageURLs(from: results)
+                    // okay to not inform isLoading = false because dismissed
                     complete(with: .success(images))
                 } catch {
                     complete(with: .failure(error))
