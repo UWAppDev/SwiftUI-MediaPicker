@@ -43,7 +43,7 @@ let package = Package(
             dependencies: [
                 .product(name: "MediaPicker", package: "swiftui-mediapicker")
             ],
-            path: "."
+            path: "App"
         )
     ]
 )
