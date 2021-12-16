@@ -113,7 +113,7 @@ public extension View {
         onCompletion: @escaping (Result<[URL], Error>) -> Void,
         @ViewBuilder loadingOverlay: @escaping () -> LoadingOverlay
     ) -> some View {
-        var configuration = PHPickerConfiguration()
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
         configuration.selectionLimit = allowsMultipleSelection ? 0 : 1
         configuration.filter = PHPickerFilter.from(allowedMediaTypes)
         
@@ -212,13 +212,13 @@ fileprivate struct MediaPicker: UIViewControllerRepresentable {
                 dismiss()
                 return
             }
+            Task { @MainActor in
+                withAnimation {
+                    coordinated.isLoading = true
+                }
+            }
             Task {
                 do {
-                    await MainActor.run {
-                        withAnimation {
-                            coordinated.isLoading = true
-                        }
-                    }
                     let images = try await imageURLs(from: results)
                     // okay to not inform isLoading = false because dismissed
                     complete(with: .success(images))
