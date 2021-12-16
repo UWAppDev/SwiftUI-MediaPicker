@@ -35,7 +35,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/UWAppDev/SwiftUI-MediaPicker.git", .branch("main"))
+        .package(url: "https://github.com/UWAppDev/SwiftUI-MediaPicker.git", "0.0.1"..<"1.0.0")
     ],
     targets: [
         .executableTarget(
