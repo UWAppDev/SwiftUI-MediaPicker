@@ -136,6 +136,7 @@ public extension View {
                         onCompletion(result)
                     }
                 case .failure(let error):
+                    isPresented.wrappedValue = false
                     onCompletion(.failure(error))
                 }
             },

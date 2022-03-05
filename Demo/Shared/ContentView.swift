@@ -31,8 +31,14 @@ struct ContentView: View {
             case .success(let urls):
                 self.urls = urls
             case .failure(let error):
-                print(error)
-                self.urls = []
+                switch error {
+                case MediaPickerErrors.imageURL(let urls, errors: let errors):
+                    print(errors)
+                    self.urls = urls
+                default:
+                    print(error)
+                    self.urls = []
+                }
             }
         }
     }

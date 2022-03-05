@@ -17,6 +17,7 @@ import SwiftUI
 import PhotosUI
 
 public extension View {
+    /// - Important: You are responsible for setting `isPresented` to false.
     func mediaImporter<LoadingOverlay: View>(
         isPresented: Binding<Bool>,
         allowedMediaTypes: MediaTypeOptions,
