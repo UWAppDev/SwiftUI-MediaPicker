@@ -17,6 +17,15 @@ import SwiftUI
 import struct PhotosUI.PHPickerResult
 @_implementationOnly import UniformTypeIdentifiers
 @_implementationOnly import struct AVFoundation.AVError
+@_implementationOnly import os
+
+private func OSLog(category: String) -> os.OSLog {
+#if DEBUG
+    return OSLog(subsystem: "dev.uwapp.MediaPicker", category: category)
+#else
+    return .disabled
+#endif
+}
 
 public extension View {
     /// Presents a system interface for allowing the user to import an existing
@@ -157,17 +166,26 @@ fileprivate struct DefaultLoadingOverlay: View {
 // https://developer.apple.com/wwdc21/10134
 fileprivate func imageURLs(from phPickerResults: [PHPickerResult],
                            allowedContentTypes: [UTType]) async throws -> [URL] {
-    try await withThrowingTaskGroup(of: URL.self) { group in
+    let log = OSLog(category: "imageURLs")
+    let signpostID = OSSignpostID(log: log, object: phPickerResults as NSArray)
+    return try await withThrowingTaskGroup(of: URL.self) { group in
+        os_signpost(.begin, log: log, name: "imageURLs task group", signpostID: signpostID,
+                    "Loading %d results", phPickerResults.count)
         var imageURLs = [URL]()
         imageURLs.reserveCapacity(phPickerResults.count)
         
+        os_signpost(.begin, log: log, name: "imageURLs add task", signpostID: signpostID,
+                    "Adding %d tasks", phPickerResults.count)
     pickerResultsLoop:
-        for result in phPickerResults {
+        for (index, result) in phPickerResults.enumerated() {
             let provider = result.itemProvider
             // TOOD: investigate should we instead use/consider
             // provider.registeredTypeIdentifiers
             for type in allowedContentTypes {
                 if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                    os_signpost(.event, log: log, name: "imageURLs add task", signpostID: signpostID,
+                                "Adding %d out of %d tasks: '%{public}@' of type %{public}@",
+                                index + 1, phPickerResults.count, provider.suggestedName ?? "", type.identifier)
                     group.addTask {
                         try await provider.fileURL(for: type)
                     }
@@ -176,11 +194,19 @@ fileprivate func imageURLs(from phPickerResults: [PHPickerResult],
             }
             throw AVError(.failedToLoadMediaData)
         }
+        os_signpost(.end, log: log, name: "imageURLs add task", signpostID: signpostID)
         
+        os_signpost(.begin, log: log, name: "imageURLs add url", signpostID: signpostID,
+                    "Adding %d urls", phPickerResults.count)
         // Obtain results from the child tasks, sequentially.
         for try await imageURL in group {
             imageURLs.append(imageURL)
+            os_signpost(.event, log: log, name: "imageURLs add url", signpostID: signpostID,
+                        "Adding %d out of %d urls: %{public}@", imageURLs.count, phPickerResults.count, imageURL.path)
         }
+        os_signpost(.end, log: log, name: "imageURLs add url", signpostID: signpostID)
+        
+        os_signpost(.end, log: log, name: "imageURLs task group", signpostID: signpostID)
         return imageURLs
     }
 }
@@ -190,9 +216,20 @@ fileprivate extension NSItemProvider {
     // https://developer.apple.com/wwdc21/10132/
     func fileURL(for type: UTType) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
+            let log = OSLog(category: "fileURL")
+            let signpostID = OSSignpostID(log: log, object: self)
+            os_signpost(.begin, log: log, name: "fileURL continuation", signpostID: signpostID,
+                        "%{public}@", suggestedName ?? "")
+            
+            os_signpost(.begin, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID,
+                        "%{public}@", suggestedName ?? "")
             // https://developer.apple.com/forums/thread/652496
             loadFileRepresentation(forTypeIdentifier: type.identifier) { url, error in
+                os_signpost(.end, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID)
+                
                 guard let src = url else {
+                    os_signpost(.end, log: log, name: "fileURL continuation", signpostID: signpostID,
+                                "errored, no src url")
                     return continuation.resume(throwing: error!)
                 }
                 do {
@@ -201,10 +238,17 @@ fileprivate extension NSItemProvider {
                     let dst = FileManager.default.temporaryDirectory
                         .appendingPathComponent(src.lastPathComponent)
                     if !FileManager.default.fileExists(atPath: dst.path) {
+                        os_signpost(.begin, log: log, name: "fileURL copy", signpostID: signpostID,
+                                    "fileURL copy from %@ to %@", src.path, dst.path)
                         try FileManager.default.copyItem(at: src, to: dst)
+                        os_signpost(.end, log: log, name: "fileURL copy", signpostID: signpostID)
                     }
+                    os_signpost(.end, log: log, name: "fileURL continuation", signpostID: signpostID,
+                                "success")
                     continuation.resume(returning: dst)
                 } catch {
+                    os_signpost(.end, log: log, name: "fileURL continuation", signpostID: signpostID,
+                                "errored, no dst url")
                     continuation.resume(throwing: error)
                 }
             }
