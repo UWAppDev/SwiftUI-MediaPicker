@@ -18,7 +18,7 @@ let package = Package(
             targets: ["AppModule"],
             bundleIdentifier: "dev.uwapp.MediaPicker.Demo",
             teamIdentifier: "2H866F22W7",
-            displayVersion: "1.0",
+            displayVersion: "1.0.1",
             bundleVersion: "1",
             iconAssetName: "AppIcon",
             accentColorAssetName: "AccentColor",
