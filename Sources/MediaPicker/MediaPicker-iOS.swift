@@ -130,17 +130,10 @@ public extension View {
             allowsMultipleSelection: allowsMultipleSelection,
             onCompletion: { (result: Result<[PHPickerResult], Error>) in
                 switch result {
-                case .success(let results):
-                    Task {
-                        do {
-                            let images = try await imageURLs(from: results,
-                                                             allowedContentTypes: allowedMediaTypes.typeIdentifiers)
-                            isPresented.wrappedValue = false
-                            onCompletion(.success(images))
-                        } catch {
-                            isPresented.wrappedValue = false
-                            onCompletion(.failure(error))
-                        }
+                case .success(let phPickerResults):
+                    importAsURLs(phPickerResults, allowedMediaTypes: allowedMediaTypes) { result in
+                        isPresented.wrappedValue = false
+                        onCompletion(result)
                     }
                 case .failure(let error):
                     onCompletion(.failure(error))
@@ -162,97 +155,109 @@ fileprivate struct DefaultLoadingOverlay: View {
     }
 }
 
-// Explore structured concurrency in Swift
-// https://developer.apple.com/wwdc21/10134
-fileprivate func imageURLs(from phPickerResults: [PHPickerResult],
-                           allowedContentTypes: [UTType]) async throws -> [URL] {
+fileprivate func importAsURLs(_ phPickerResults: [PHPickerResult],
+                              allowedMediaTypes: MediaTypeOptions,
+                              onCompletion: @escaping (Result<[URL], Error>) -> Void) {
     let log = OSLog(category: "imageURLs")
     let signpostID = OSSignpostID(log: log, object: phPickerResults as NSArray)
-    return try await withThrowingTaskGroup(of: URL.self) { group in
-        os_signpost(.begin, log: log, name: "imageURLs task group", signpostID: signpostID,
-                    "Loading %d results", phPickerResults.count)
-        var imageURLs = [URL]()
-        imageURLs.reserveCapacity(phPickerResults.count)
-        
-        os_signpost(.begin, log: log, name: "imageURLs add task", signpostID: signpostID,
-                    "Adding %d tasks", phPickerResults.count)
-    pickerResultsLoop:
-        for (index, result) in phPickerResults.enumerated() {
-            let provider = result.itemProvider
-            // TOOD: investigate should we instead use/consider
-            // provider.registeredTypeIdentifiers
-            for type in allowedContentTypes {
-                if provider.hasItemConformingToTypeIdentifier(type.identifier) {
-                    os_signpost(.event, log: log, name: "imageURLs add task", signpostID: signpostID,
-                                "Adding %d out of %d tasks: '%{public}@' of type %{public}@",
-                                index + 1, phPickerResults.count, provider.suggestedName ?? "", type.identifier)
-                    group.addTask {
-                        try await provider.fileURL(for: type)
-                    }
-                    continue pickerResultsLoop
-                }
-            }
-            throw AVError(.failedToLoadMediaData)
-        }
-        os_signpost(.end, log: log, name: "imageURLs add task", signpostID: signpostID)
-        
-        os_signpost(.begin, log: log, name: "imageURLs add url", signpostID: signpostID,
-                    "Adding %d urls", phPickerResults.count)
-        // Obtain results from the child tasks, sequentially.
-        for try await imageURL in group {
-            imageURLs.append(imageURL)
-            os_signpost(.event, log: log, name: "imageURLs add url", signpostID: signpostID,
-                        "Adding %d out of %d urls: %{public}@", imageURLs.count, phPickerResults.count, imageURL.path)
-        }
-        os_signpost(.end, log: log, name: "imageURLs add url", signpostID: signpostID)
-        
-        os_signpost(.end, log: log, name: "imageURLs task group", signpostID: signpostID)
-        return imageURLs
-    }
-}
+    os_signpost(.begin, log: log, name: "imageURLs task group", signpostID: signpostID,
+                "Loading %d results", phPickerResults.count)
+    
+    var imageURLs = [URL?](repeating: nil, count: phPickerResults.count)
+    var errors = [Error]()
+    var finishedCount = 0
+    let queue = DispatchQueue(label: UUID().uuidString)
+    
+    func recordResult(_ result: Result<URL, Error>, for index: Int) {
+        queue.sync {
+            finishedCount += 1
 
-fileprivate extension NSItemProvider {
-    // Meet async/await in Swift
-    // https://developer.apple.com/wwdc21/10132/
-    func fileURL(for type: UTType) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
-            let log = OSLog(category: "fileURL")
-            let signpostID = OSSignpostID(log: log, object: self)
-            os_signpost(.begin, log: log, name: "fileURL continuation", signpostID: signpostID,
-                        "%{public}@", suggestedName ?? "")
+            switch result {
+            case .success(let url):
+                os_signpost(.event, log: log, name: "imageURLs add url", signpostID: signpostID,
+                            "Adding %d out of %d results, url: %{public}@",
+                            finishedCount, phPickerResults.count, url.path)
+                imageURLs[index] = url
+            case .failure(let error):
+                os_signpost(.event, log: log, name: "imageURLs add url", signpostID: signpostID,
+                            "Adding %d out of %d results, error: %{public}@",
+                            finishedCount, phPickerResults.count, error.localizedDescription)
+                errors.append(error)
+            }
             
-            os_signpost(.begin, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID,
-                        "%{public}@", suggestedName ?? "")
-            // https://developer.apple.com/forums/thread/652496
-            loadFileRepresentation(forTypeIdentifier: type.identifier) { url, error in
-                os_signpost(.end, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID)
+            guard finishedCount == phPickerResults.count else {
+                return
+            }
+            
+            let resultImageURLs = imageURLs.compactMap { $0 }
+            if errors.isEmpty {
+                os_signpost(.end, log: log, name: "imageURLs task group", signpostID: signpostID,
+                            "success")
+                onCompletion(.success(resultImageURLs))
+            } else {
+                os_signpost(.end, log: log, name: "imageURLs task group", signpostID: signpostID,
+                            "errored: %d", errors.count)
+                onCompletion(.failure(MediaPickerErrors.imageURL(resultImageURLs, errors: errors)))
+            }
+        }
+    }
+
+    os_signpost(.begin, log: log, name: "imageURLs add task", signpostID: signpostID,
+                "Adding %d tasks", phPickerResults.count)
+pickerResultsLoop:
+    for (index, result) in phPickerResults.enumerated() {
+        let provider = result.itemProvider
+        // TOOD: investigate should we instead use/consider
+        // provider.registeredTypeIdentifiers
+        for type in allowedMediaTypes.typeIdentifiers {
+            if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                os_signpost(.event, log: log, name: "imageURLs add task", signpostID: signpostID,
+                            "Adding %d out of %d tasks: '%{public}@' of type %{public}@",
+                            index + 1, phPickerResults.count, provider.suggestedName ?? "", type.identifier)
                 
-                guard let src = url else {
-                    os_signpost(.end, log: log, name: "fileURL continuation", signpostID: signpostID,
-                                "errored, no src url")
-                    return continuation.resume(throwing: error!)
-                }
-                do {
+                let signpostID = OSSignpostID(log: log, object: provider)
+                os_signpost(.begin, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID,
+                            "%{public}@", provider.suggestedName ?? "")
+                // https://developer.apple.com/forums/thread/652496
+                provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, error in
+                    guard let src = url else {
+                        os_signpost(.end, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID,
+                                    "errored, no src url")
+                        return recordResult(.failure(error!), for: index)
+                    }
+                    os_signpost(.end, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID)
+                    
                     // Because the src/url will be deleted once we return,
                     // will copy the stored image to a different temp url.
                     let dst = FileManager.default.temporaryDirectory
                         .appendingPathComponent(src.lastPathComponent)
-                    if !FileManager.default.fileExists(atPath: dst.path) {
-                        os_signpost(.begin, log: log, name: "fileURL copy", signpostID: signpostID,
-                                    "fileURL copy from %@ to %@", src.path, dst.path)
-                        try FileManager.default.copyItem(at: src, to: dst)
-                        os_signpost(.end, log: log, name: "fileURL copy", signpostID: signpostID)
+                    os_signpost(.begin, log: log, name: "fileURL copy", signpostID: signpostID,
+                                "fileURL copy from %@ to %@", src.path, dst.path)
+                    if FileManager.default.fileExists(atPath: dst.path) {
+                        os_signpost(.end, log: log, name: "fileURL copy", signpostID: signpostID,
+                                    "already exists")
+                        return recordResult(.success(dst), for: index)
+                    } else {
+                        do {
+                            try FileManager.default.copyItem(at: src, to: dst)
+                            os_signpost(.end, log: log, name: "fileURL copy", signpostID: signpostID,
+                                        "copied")
+                            return recordResult(.success(dst), for: index)
+                        } catch {
+                            os_signpost(.end, log: log, name: "fileURL copy", signpostID: signpostID,
+                                        "errored: %{public}d", error.localizedDescription)
+                            return recordResult(.failure(error), for: index)
+                        }
                     }
-                    os_signpost(.end, log: log, name: "fileURL continuation", signpostID: signpostID,
-                                "success")
-                    continuation.resume(returning: dst)
-                } catch {
-                    os_signpost(.end, log: log, name: "fileURL continuation", signpostID: signpostID,
-                                "errored, no dst url")
-                    continuation.resume(throwing: error)
                 }
+                continue pickerResultsLoop
             }
         }
+        os_signpost(.event, log: log, name: "imageURLs add task", signpostID: signpostID,
+                    "Adding %d out of %d tasks: '%{public}@' can't be loaded, only has %{public}@",
+                    index + 1, phPickerResults.count, provider.suggestedName ?? "", provider.registeredTypeIdentifiers)
+        recordResult(.failure(MediaPickerErrors.missingFileRepresentation), for: index)
     }
+    os_signpost(.end, log: log, name: "imageURLs add task", signpostID: signpostID)
 }
 #endif
