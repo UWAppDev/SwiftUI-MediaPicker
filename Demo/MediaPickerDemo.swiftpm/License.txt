@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2020-2021 AppDev@UW.edu and the SwiftUI MediaPicker authors.
+Copyright (c) 2020-2022 AppDev@UW.edu and the SwiftUI MediaPicker authors.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
