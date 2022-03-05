@@ -14,7 +14,9 @@
 
 #if canImport(PhotosUI)
 import SwiftUI
-@_implementationOnly import PhotosUI
+import struct PhotosUI.PHPickerResult
+@_implementationOnly import UniformTypeIdentifiers
+@_implementationOnly import struct AVFoundation.AVError
 
 public extension View {
     /// Presents a system interface for allowing the user to import an existing
@@ -113,19 +115,30 @@ public extension View {
         onCompletion: @escaping (Result<[URL], Error>) -> Void,
         @ViewBuilder loadingOverlay: @escaping () -> LoadingOverlay
     ) -> some View {
-        var configuration = PHPickerConfiguration(photoLibrary: .shared())
-        configuration.selectionLimit = allowsMultipleSelection ? 0 : 1
-        configuration.filter = PHPickerFilter.from(allowedMediaTypes)
-        
-        return self.sheet(isPresented: isPresented) {
-            MediaPickerWrapper(
-                isPresented: isPresented,
-                allowedContentTypes: allowedMediaTypes.typeIdentifiers,
-                configuration: configuration,
-                onCompletion: onCompletion,
-                makeLoadingOverlay: loadingOverlay
-            )
-        }
+        self.mediaImporter(
+            isPresented: isPresented,
+            allowedMediaTypes: allowedMediaTypes,
+            allowsMultipleSelection: allowsMultipleSelection,
+            onCompletion: { (result: Result<[PHPickerResult], Error>) in
+                switch result {
+                case .success(let results):
+                    Task {
+                        do {
+                            let images = try await imageURLs(from: results,
+                                                             allowedContentTypes: allowedMediaTypes.typeIdentifiers)
+                            isPresented.wrappedValue = false
+                            onCompletion(.success(images))
+                        } catch {
+                            isPresented.wrappedValue = false
+                            onCompletion(.failure(error))
+                        }
+                    }
+                case .failure(let error):
+                    onCompletion(.failure(error))
+                }
+            },
+            loadingOverlay: loadingOverlay
+        )
     }
 }
 
@@ -140,133 +153,35 @@ fileprivate struct DefaultLoadingOverlay: View {
     }
 }
 
-fileprivate struct MediaPickerWrapper<LoadingOverlay: View>: View {
-    var isPresented: Binding<Bool>
-    @State var isLoading: Bool = false
-    let allowedContentTypes: [UTType]
-    let configuration: PHPickerConfiguration
-    let onCompletion: (Result<[URL], Error>) -> Void
-    let makeLoadingOverlay: () -> LoadingOverlay
-
-    var body: some View {
-        MediaPicker(
-            isPresented: isPresented,
-            isLoading: $isLoading,
-            allowedContentTypes: allowedContentTypes,
-            configuration: configuration,
-            onCompletion: onCompletion
-        )
-        .overlay(isLoading ? makeLoadingOverlay() : nil)
-    }
-}
-
-fileprivate extension PHPickerFilter {
-    static func from(_ mediaOptions: MediaTypeOptions) -> Self {
-        var filters = [PHPickerFilter]()
-        if mediaOptions.contains(.images) {
-            filters.append(.images)
-        } else if mediaOptions.contains(.livePhotos) {
-            filters.append(.livePhotos)
-        }
-        if mediaOptions.contains(.videos) {
-            filters.append(.videos)
-        }
-        return PHPickerFilter.any(of: filters)
-    }
-}
-
-// Meet the new Photos picker
-// https://developer.apple.com/wwdc20/10652
-fileprivate struct MediaPicker: UIViewControllerRepresentable {
-    @Binding var isPresented: Bool
-    @Binding var isLoading: Bool
-    let allowedContentTypes: [UTType]
-    let configuration: PHPickerConfiguration
-    let onCompletion: (Result<[URL], Error>) -> Void
-    
-    func makeUIViewController(context: Context) -> PHPickerViewController {
-        let controller = PHPickerViewController(configuration: configuration)
-        controller.delegate = context.coordinator
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: PHPickerViewController,
-                                context: Context) {
-        // do nothing
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        return Coordinator(for: self)
-    }
-    
-    class Coordinator: PHPickerViewControllerDelegate {
-        let coordinated: MediaPicker
+// Explore structured concurrency in Swift
+// https://developer.apple.com/wwdc21/10134
+fileprivate func imageURLs(from phPickerResults: [PHPickerResult],
+                           allowedContentTypes: [UTType]) async throws -> [URL] {
+    try await withThrowingTaskGroup(of: URL.self) { group in
+        var imageURLs = [URL]()
+        imageURLs.reserveCapacity(phPickerResults.count)
         
-        init(for picker: MediaPicker) {
-            self.coordinated = picker
-        }
-        
-        func picker(_ picker: PHPickerViewController,
-                    didFinishPicking results: [PHPickerResult]) {
-            guard !results.isEmpty else {
-                dismiss()
-                return
-            }
-            Task { @MainActor in
-                withAnimation {
-                    coordinated.isLoading = true
-                }
-            }
-            Task {
-                do {
-                    let images = try await imageURLs(from: results)
-                    // okay to not inform isLoading = false because dismissed
-                    complete(with: .success(images))
-                } catch {
-                    complete(with: .failure(error))
-                }
-            }
-        }
-        
-        // Explore structured concurrency in Swift
-        // https://developer.apple.com/wwdc21/10134
-        private func imageURLs(from phPickerResults: [PHPickerResult]) async throws -> [URL] {
-            try await withThrowingTaskGroup(of: URL.self) { group in
-                var imageURLs = [URL]()
-                imageURLs.reserveCapacity(phPickerResults.count)
-                
-            pickerResultsLoop:
-                for result in phPickerResults {
-                    let provider = result.itemProvider
-                    // TOOD: investigate should we instead use/consider
-                    // provider.registeredTypeIdentifiers
-                    for type in coordinated.allowedContentTypes {
-                        if provider.hasItemConformingToTypeIdentifier(type.identifier) {
-                            group.addTask {
-                                try await provider.fileURL(for: type)
-                            }
-                            continue pickerResultsLoop
-                        }
+    pickerResultsLoop:
+        for result in phPickerResults {
+            let provider = result.itemProvider
+            // TOOD: investigate should we instead use/consider
+            // provider.registeredTypeIdentifiers
+            for type in allowedContentTypes {
+                if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                    group.addTask {
+                        try await provider.fileURL(for: type)
                     }
-                    throw AVError(.failedToLoadMediaData)
+                    continue pickerResultsLoop
                 }
-                
-                // Obtain results from the child tasks, sequentially.
-                for try await imageURL in group {
-                    imageURLs.append(imageURL)
-                }
-                return imageURLs
             }
+            throw AVError(.failedToLoadMediaData)
         }
         
-        private func dismiss() {
-            coordinated.isPresented = false
+        // Obtain results from the child tasks, sequentially.
+        for try await imageURL in group {
+            imageURLs.append(imageURL)
         }
-        
-        private func complete(with result: Result<[URL], Error>) {
-            dismiss()
-            coordinated.onCompletion(result)
-        }
+        return imageURLs
     }
 }
 
