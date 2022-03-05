@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if canImport(PhotosUI)
+#if os(iOS)
 import SwiftUI
 import struct PhotosUI.PHPickerResult
 @_implementationOnly import UniformTypeIdentifiers

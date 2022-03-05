@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if canImport(PhotosUI)
+#if canImport(PhotosUI) && os(iOS)
 import SwiftUI
 import PhotosUI
 

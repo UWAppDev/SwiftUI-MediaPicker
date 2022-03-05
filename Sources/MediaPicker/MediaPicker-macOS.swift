@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if !canImport(PhotosUI)
+#if os(macOS)
 import SwiftUI
 
 public extension View {
