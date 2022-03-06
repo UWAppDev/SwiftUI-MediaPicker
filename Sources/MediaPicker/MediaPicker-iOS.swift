@@ -66,7 +66,7 @@ public extension View {
         isPresented: Binding<Bool>,
         allowedMediaTypes: MediaTypeOptions,
         onCompletion: @escaping (Result<URL, Error>) -> Void,
-        @ViewBuilder loadingOverlay: @escaping () -> LoadingOverlay
+        @ViewBuilder loadingOverlay: @escaping (Progress) -> LoadingOverlay
     ) -> some View {
         self.mediaImporter(
             isPresented: isPresented,
@@ -122,42 +122,47 @@ public extension View {
         allowedMediaTypes: MediaTypeOptions,
         allowsMultipleSelection: Bool,
         onCompletion: @escaping (Result<[URL], Error>) -> Void,
-        @ViewBuilder loadingOverlay: @escaping () -> LoadingOverlay
+        @ViewBuilder loadingOverlay: @escaping (Progress) -> LoadingOverlay
     ) -> some View {
-        self.mediaImporter(
+        let progress = Progress()
+        return self.mediaImporter(
             isPresented: isPresented,
             allowedMediaTypes: allowedMediaTypes,
-            allowsMultipleSelection: allowsMultipleSelection,
-            onCompletion: { (result: Result<[PHPickerResult], Error>) in
-                switch result {
-                case .success(let phPickerResults):
-                    importAsURLs(phPickerResults, allowedMediaTypes: allowedMediaTypes) { result in
-                        isPresented.wrappedValue = false
-                        onCompletion(result)
-                    }
-                case .failure(let error):
+            allowsMultipleSelection: allowsMultipleSelection
+        ) { (result: Result<[PHPickerResult], Error>) in
+            switch result {
+            case .success(let phPickerResults):
+                importAsURLs(phPickerResults,
+                             allowedMediaTypes: allowedMediaTypes,
+                             progress: progress) { result in
                     isPresented.wrappedValue = false
-                    onCompletion(.failure(error))
+                    onCompletion(result)
                 }
-            },
-            loadingOverlay: loadingOverlay
-        )
+            case .failure(let error):
+                isPresented.wrappedValue = false
+                onCompletion(.failure(error))
+            }
+        } loadingOverlay: {
+            loadingOverlay(progress)
+        }
     }
 }
 
 fileprivate struct DefaultLoadingOverlay: View {
+    let progress: Progress
     var body: some View {
-        ZStack {
-            Color(.tertiarySystemBackground)
-                .ignoresSafeArea()
-
-            ProgressView("Importing Media...")
+        NavigationView {
+            ProgressView(progress)
+                .padding()
+                .navigationTitle("Importing Media...")
         }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
 
 fileprivate func importAsURLs(_ phPickerResults: [PHPickerResult],
                               allowedMediaTypes: MediaTypeOptions,
+                              progress: Progress,
                               onCompletion: @escaping (Result<[URL], Error>) -> Void) {
     let log = OSLog(category: "imageURLs")
     let signpostID = OSSignpostID(log: log, object: phPickerResults as NSArray)
@@ -168,6 +173,8 @@ fileprivate func importAsURLs(_ phPickerResults: [PHPickerResult],
     var errors = [Error]()
     var finishedCount = 0
     let queue = DispatchQueue(label: UUID().uuidString)
+    progress.totalUnitCount = Int64(phPickerResults.count)
+    progress.completedUnitCount = 0
     
     func recordResult(_ result: Result<URL, Error>, for index: Int) {
         queue.sync {
@@ -220,7 +227,7 @@ pickerResultsLoop:
                 os_signpost(.begin, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID,
                             "%{public}@", provider.suggestedName ?? "")
                 // https://developer.apple.com/forums/thread/652496
-                provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, error in
+                let loadingProgress = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, error in
                     guard let src = url else {
                         os_signpost(.end, log: log, name: "fileURL loadFileRepresentation", signpostID: signpostID,
                                     "errored, no src url")
@@ -251,6 +258,7 @@ pickerResultsLoop:
                         }
                     }
                 }
+                progress.addChild(loadingProgress, withPendingUnitCount: 1)
                 continue pickerResultsLoop
             }
         }
