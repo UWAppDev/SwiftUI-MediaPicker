@@ -8,17 +8,17 @@ import PackageDescription
 import AppleProductTypes
 
 let package = Package(
-    name: "MediaPickerDemo",
+    name: "SwiftUI Media Picker",
     platforms: [
         .iOS("15.2")
     ],
     products: [
         .iOSApplication(
-            name: "MediaPickerDemo",
+            name: "SwiftUI Media Picker",
             targets: ["AppModule"],
             bundleIdentifier: "dev.uwapp.MediaPicker.Demo",
             teamIdentifier: "2H866F22W7",
-            displayVersion: "1.0.1",
+            displayVersion: "1.0.2",
             bundleVersion: "1",
             iconAssetName: "AppIcon",
             accentColorAssetName: "AccentColor",
