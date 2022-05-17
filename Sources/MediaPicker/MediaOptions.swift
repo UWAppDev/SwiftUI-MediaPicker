@@ -35,9 +35,9 @@ public struct MediaTypeOptions: OptionSet {
     internal var typeIdentifiers: [UTType] {
         var types = [UTType]()
         if contains(.images) {
-            types.append(.image)
+            types += [.heic, .heif, .image]
         } else if contains(.livePhotos) {
-            types.append(.livePhoto)
+            types += [.livePhoto, .heic]
         }
         if contains(.videos) {
             types.append(.audiovisualContent)
